@@ -18,7 +18,7 @@ https://www.npmjs.com/package/selenium-webdriver
 
 API Doc: http://seleniumhq.github.io/selenium/docs/api/javascript/index.html
 
-**********************************************************************************************
+***********************************************************************************************
 To run test:
 
 On Node.js Command Prompt change directory to neo\test\resources\
@@ -33,4 +33,4 @@ Simply return to Node.js Command Prompt and install by running
 
 npm install (missing module)
 
-**********************************************************************************************
+***********************************************************************************************

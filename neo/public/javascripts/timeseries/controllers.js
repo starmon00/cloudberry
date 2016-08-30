@@ -34,7 +34,7 @@ angular.module('cloudberry.timeseries', ['cloudberry.common'])
       top: 10,
       right: 30,
       bottom: 30,
-      left: 50
+      left: 40
     };
     var width = 962 - margin.left - margin.right;
     var height = 150 - margin.top - margin.bottom;
@@ -44,8 +44,12 @@ angular.module('cloudberry.timeseries', ['cloudberry.common'])
         link: function ($scope, $element, $attrs) {
           var chart = d3.select($element[0]);
           $scope.$watch('resultArray', function (newVal, oldVal) {
-            if(newVal.length == 0)
-              return;
+
+            if(oldVal.length == 0)
+            {
+                if(newVal.length == 0)
+                  return;
+            }
 
             chart.selectAll('*').remove();
 
@@ -77,31 +81,26 @@ angular.module('cloudberry.timeseries', ['cloudberry.common'])
                 .on("click", function() { timeSeries.filterAll(); dc.redrawAll();})
                 .style("position", "inherit")
                 .style("bottom", "90%")
-                .style("left", "10%");
+                .style("left", "3%");
 
 
-            chart.append('text')
-              .style('font','12px sans-serif')
-              .html(minDate.getFullYear()+"-"+(minDate.getMonth()+1)+"-"+minDate.getDate());
+            var startDate = (minDate.getFullYear()+"-"+(minDate.getMonth()+1));
+            var endDate = (maxDate.getFullYear()+"-"+(maxDate.getMonth()+1));
 
             timeSeries
               .width(width)
               .height(height)
-              .margins(margin)
               .dimension(timeDimension)
               .group(timeGroup)
               .centerBar(true)
               .x(d3.time.scale().domain([minDate, maxDate]))
               .xUnits(d3.time.days)
-              .gap(1);
+              .gap(1)
+              .xAxisLabel(startDate + "   to   " + endDate);
 
 
 
             dc.renderAll();
-
-            chart.append('text')
-              .style('font','12px sans-serif')
-              .html(maxDate.getFullYear()+"-"+(maxDate.getMonth()+1)+"-"+maxDate.getDate());
 
           })
         }

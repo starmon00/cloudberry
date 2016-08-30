@@ -1,26 +1,41 @@
 package edu.uci.ics.cloudberry.zion.model.impl
 
 import edu.uci.ics.cloudberry.zion.model.schema._
+import org.joda.time.{DateTime, DateTimeZone}
 import play.api.libs.json.Json
 
-trait TestQuery {
+object TestQuery {
 
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+  val TwitterDataSet = TwitterDataStore.DatasetName
   val schema = TwitterDataStore.TwitterSchema
-  val startTime = "2016-01-01T00:00:00Z"
-  val endTime = "2016-12-01T00:00:00Z"
+  val startTime = "2016-01-01T00:00:00.000Z"
+  val endTime = "2016-12-01T00:00:00.000Z"
 
   val textValue = Seq("zika", "virus")
   val stateValue = Seq(37, 51, 24, 11, 10, 34, 42, 9, 44)
   val timeFilter = FilterStatement("create_at", None, Relation.inRange, Seq(startTime, endTime))
+  val zikaFilter = FilterStatement("text", None, Relation.contains, Seq("zika"))
+  val virusFilter = FilterStatement("text", None, Relation.contains, Seq("virus"))
   val textFilter = FilterStatement("text", None, Relation.contains, textValue)
   val stateFilter = FilterStatement("geo_tag.stateID", None, Relation.in, stateValue)
   val retweetFilter = FilterStatement("is_retweet", None, Relation.isTrue, Seq.empty)
-  val bagFilter = FilterStatement("hashtag", None, Relation.contains, Seq(BagField("tags", DataType.String)))
+  val bagFilter = FilterStatement("hashtag", None, Relation.contains, Seq(BagField("tags", DataType.String, false)))
 
   val intValues = Seq(1, 2, 3)
   val stringValue = Seq("English")
   val longValues: Seq[Long] = Seq(1644l, 45464l)
   val doubleValues: Seq[Double] = Seq(0.45541, 9.456)
+
+  val sourceInterval = new org.joda.time.Interval(new DateTime(2015, 1, 1, 0, 0), new DateTime(2017, 1, 1, 0, 0))
+  val sourceStat = Stats(sourceInterval.getStart, sourceInterval.getEnd, sourceInterval.getEnd, 10000)
+  val sourceInfo = DataSetInfo(TwitterDataSet, None, schema, sourceInterval, sourceStat)
+
+  val zikaHalfInterval = new org.joda.time.Interval(new DateTime(2015, 1, 1, 0, 0), new DateTime(2016, 6, 1, 0, 0))
+  val zikaStats = Stats(zikaHalfInterval.getStart, zikaHalfInterval.getEnd, zikaHalfInterval.getEnd, 50)
+
+  val zikaCreateQuery = Query(TwitterDataSet, filter = Seq(zikaFilter))
+  val zikaHalfYearViewInfo = DataSetInfo("zika", Some(zikaCreateQuery), schema, zikaHalfInterval, zikaStats)
 
   val intFilter = FilterStatement("id", None, Relation.==, intValues)
   val stringFilter = FilterStatement("lang", None, Relation.matches, stringValue)
@@ -29,19 +44,31 @@ trait TestQuery {
 
   val unnestHashTag = UnnestStatement("hashtags", "tag")
   val byTag = ByStatement("tag", None, None)
+  val bySecond = ByStatement("create_at", Some(Interval(TimeUnit.Second)), Some("sec"))
+  val byMinute = ByStatement("create_at", Some(Interval(TimeUnit.Minute)), Some("min"))
   val byHour = ByStatement("create_at", Some(Interval(TimeUnit.Hour)), Some("hour"))
+  val byDay = ByStatement("create_at", Some(Interval(TimeUnit.Day)), Some("day"))
+  val byWeek = ByStatement("create_at", Some(Interval(TimeUnit.Week)), Some("week"))
+  val byMonth = ByStatement("create_at", Some(Interval(TimeUnit.Month)), Some("month"))
+  val byYear = ByStatement("create_at", Some(Interval(TimeUnit.Year)), Some("year"))
   val byState = ByStatement("geo", Some(Level("state")), Some("state"))
-  val byGeocell10 = ByStatement("coordinate", Some(GeoCellTenth), Some("scale"))
-  val byGeocell100 = ByStatement("coordinate", Some(GeoCellHundredth), Some("scale"))
-  val byGeocell1000 = ByStatement("coordinate", Some(GeoCellThousandth), Some("scale"))
+  val byGeocell10 = ByStatement("coordinate", Some(GeoCellTenth), Some("cell"))
+  val byGeocell100 = ByStatement("coordinate", Some(GeoCellHundredth), Some("cell"))
+  val byGeocell1000 = ByStatement("coordinate", Some(GeoCellThousandth), Some("cell"))
   val byUser = ByStatement("user.id", None, None)
+  val byBin = ByStatement("geo_tag.stateID", Some(Bin(10)), Some("state"))
 
   val aggrCount = AggregateStatement("*", Count, "count")
+  val aggrMaxGroupBy = AggregateStatement("count", Max, "max")
+  val aggrMax = AggregateStatement("id", Max, "max")
+  val aggrMin = AggregateStatement("id", Min, "min")
+  val aggrSum = AggregateStatement("id", Sum, "sum")
+  val aggrAvg = AggregateStatement("id", Avg, "avg")
+
 
   val selectRecent = SelectStatement(Seq("-create_at"), 100, 0, Seq("create_at", "id", "user.id"))
   val selectTop10Tag = SelectStatement(Seq("-count"), 10, 0, Seq.empty)
-
-
+  val selectTop10 = SelectStatement(Seq.empty, 10, 0, Seq.empty)
 
   val filterJSON =
     s"""
@@ -65,6 +92,17 @@ trait TestQuery {
        |    "values": [
        |      ${textValue.map("\"" + _ + "\"").mkString(",")}
        |    ]
+       |  }
+       | ]
+     """.stripMargin
+
+  val filterZikaJSON =
+    s"""
+       |"filter": [
+       |  {
+       |    "field": "text",
+       |    "relation": "contains",
+       |    "values": ["zika"]
        |  }
        | ]
      """.stripMargin
@@ -199,13 +237,42 @@ trait TestQuery {
        |}
     """.stripMargin
   )
+  val groupByBinJSON = Json.parse(
+    s"""
+       |{
+       | "dataset": "twitter.ds_tweet",
+       | "group": {
+       |   "by": [
+       |      {
+       |        "field": "geo_tag.stateID",
+       |        "apply": {
+       |          "name": "bin",
+       |          "args": {
+       |            "scale": 10
+       |          }
+       |        },
+       |        "as": "state"
+       |      }
+       |    ],
+       |   "aggregate": [
+       |     {
+       |       "field": "*",
+       |       "apply": {
+       |         "name": "count"
+       |       },
+       |       "as": "count"
+       |     }
+       |    ]
+       |  }
+       |}
+    """.stripMargin)
 
   val topKHashTagJSON = Json.parse(
     s"""
        |{
        | "dataset": "twitter.ds_tweet",
        | $filterJSON,
-       | "unnest" : { "hashtags": "tag"},
+       | "unnest" : [{ "hashtags": "tag"}],
        | "group": {
        |    "by": [
        |      {
@@ -355,7 +422,7 @@ trait TestQuery {
       |        "apply": {
       |          "name": "geoCellTenth"
       |        },
-      |        "as": "scale"
+      |        "as": "cell"
       |      }
       |    ],
       |    "aggregate": [
@@ -382,7 +449,7 @@ trait TestQuery {
       |        "apply": {
       |          "name": "geoCellHundredth"
       |        },
-      |        "as": "scale"
+      |        "as": "cell"
       |      }
       |    ],
       |    "aggregate": [
@@ -409,7 +476,7 @@ trait TestQuery {
       |        "apply": {
       |          "name": "geoCellThousandth"
       |        },
-      |        "as": "scale"
+      |        "as": "cell"
       |      }
       |    ],
       |    "aggregate": [
@@ -449,5 +516,66 @@ trait TestQuery {
        |}
      """.stripMargin)
 
+  val globalCountJSON = Json.parse(
+    s"""
+       |{
+       | "dataset": "twitter.ds_tweet",
+       | "global": {
+       |   "globalAggregate":
+       |     {
+       |       "field": "*",
+       |       "apply": {
+       |         "name": "count"
+       |       },
+       |       "as": "count"
+       |     }
+       |  }
+       |}
+    """.stripMargin)
+
+  val globalMaxJSON = Json.parse(
+    s"""
+       |{
+       | "dataset": "twitter.ds_tweet",
+       | "global": {
+       |   "globalAggregate":
+       |     {
+       |       "field": "id",
+       |       "apply": {
+       |         "name": "max"
+       |       },
+       |       "as": "max"
+       |     }
+       |  }
+       |}
+    """.stripMargin)
+
+  val globalMinJSON = Json.parse(
+    s"""
+       |{
+       | "dataset": "twitter.ds_tweet",
+       | "global": {
+       |   "globalAggregate":
+       |     {
+       |       "field": "id",
+       |       "apply": {
+       |         "name": "min"
+       |       },
+       |       "as": "min"
+       |     }
+       |  }
+       |}
+    """.stripMargin)
+
+  val zikaJSON = Json.parse(
+    s"""
+       |{
+       | "dataset": "twitter.ds_tweet",
+       | $filterZikaJSON
+       |}
+    """.stripMargin)
+
   def removeEmptyLine(string: String): String = string.split("\\r?\\n").filterNot(_.trim.isEmpty).mkString("\n")
+
+  def unifyNewLine(string: String): String = string.replaceAll("\\r?\\n", "\n")
 }
